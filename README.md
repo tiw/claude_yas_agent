@@ -310,3 +310,10 @@ data_agent/
 - **短期目标**：模块化重构、统一工具抽象、完善错误处理
 - **中期目标**：Memory管理、流式响应、并行执行
 - **长期目标**：可插拔架构、性能优化、插件生态系统
+
+### Pydantic-AI理念改进
+基于Pydantic-AI框架的设计理念，项目制定了详细的改进方案，参考 [PYDANTIC_AI_IMPROVEMENTS.md](PYDANTIC_AI_IMPROVEMENTS.md)：
+- **类型安全**：引入Pydantic模型验证，确保数据结构正确性
+- **API简化**：借鉴Pydantic-AI的简洁API设计
+- **工具装饰器**：实现类似`@agent.tool`的工具定义方式
+- **依赖注入**：支持灵活的运行时依赖注入机制
