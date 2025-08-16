@@ -128,3 +128,21 @@ dmypy.json
 .vscode/
 .idea/
 .DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Log files
+*.log
+
+# Temp files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# OS generated files
+ehthumbs_vista.db
+Thumbs.db
