@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-2xl mx-auto p-6">
+        <h1 class="text-2xl font-bold text-center mb-6">WebSocket连接测试</h1>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="server-url">
+                    服务器地址
+                </label>
+                <input 
+                    id="server-url" 
+                    type="text" 
+                    value="ws://localhost:8082/api/ws" 
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                >
+            </div>
+            
+            <div class="flex space-x-4 mb-4">
+                <button 
+                    id="connect-btn" 
+                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                >
+                    连接
+                </button>
+                <button 
+                    id="disconnect-btn" 
+                    class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                    disabled
+                >
+                    断开
+                </button>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="message-input">
+                    发送消息
+                </label>
+                <div class="flex space-x-2">
+                    <input 
+                        id="message-input" 
+                        type="text" 
+                        placeholder="输入要发送的消息"
+                        class="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        disabled
+                    >
+                    <button 
+                        id="send-btn" 
+                        class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                        disabled
+                    >
+                        发送
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">
+                    连接状态
+                </label>
+                <div id="status" class="text-center py-2 px-4 rounded bg-gray-200">
+                    未连接
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2">
+                    消息日志
+                </label>
+                <div 
+                    id="messages" 
+                    class="h-64 overflow-y-auto border rounded p-3 bg-gray-50"
+                ></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        
+        const serverUrl = document.getElementById('server-url');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        
+        function addMessage(content, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('mb-2', 'p-2', 'rounded');
+            
+            const timestamp = new Date().toLocaleTimeString();
+            
+            switch (type) {
+                case 'info':
+                    messageDiv.classList.add('bg-blue-100', 'text-blue-800');
+                    break;
+                case 'success':
+                    messageDiv.classList.add('bg-green-100', 'text-green-800');
+                    break;
+                case 'error':
+                    messageDiv.classList.add('bg-red-100', 'text-red-800');
+                    break;
+                case 'received':
+                    messageDiv.classList.add('bg-purple-100', 'text-purple-800');
+                    break;
+            }
+            
+            messageDiv.innerHTML = `<span class="font-semibold">[${timestamp}]</span> ${content}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function updateStatus(text, type = 'default') {
+            statusDiv.textContent = text;
+            statusDiv.className = 'text-center py-2 px-4 rounded';
+            
+            switch (type) {
+                case 'connected':
+                    statusDiv.classList.add('bg-green-200', 'text-green-800');
+                    break;
+                case 'disconnected':
+                    statusDiv.classList.add('bg-gray-200', 'text-gray-800');
+                    break;
+                case 'error':
+                    statusDiv.classList.add('bg-red-200', 'text-red-800');
+                    break;
+                default:
+                    statusDiv.classList.add('bg-gray-200', 'text-gray-800');
+            }
+        }
+        
+        connectBtn.addEventListener('click', () => {
+            try {
+                socket = new WebSocket(serverUrl.value);
+                
+                socket.onopen = () => {
+                    updateStatus('已连接', 'connected');
+                    addMessage('WebSocket连接已建立', 'success');
+                    
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                };
+                
+                socket.onmessage = (event) => {
+                    addMessage(`收到消息: ${event.data}`, 'received');
+                };
+                
+                socket.onclose = () => {
+                    updateStatus('未连接', 'disconnected');
+                    addMessage('WebSocket连接已关闭', 'info');
+                    
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    messageInput.disabled = true;
+                    sendBtn.disabled = true;
+                };
+                
+                socket.onerror = (error) => {
+                    updateStatus('连接错误', 'error');
+                    addMessage(`WebSocket错误: ${error.message}`, 'error');
+                };
+            } catch (error) {
+                updateStatus('连接失败', 'error');
+                addMessage(`连接失败: ${error.message}`, 'error');
+            }
+        });
+        
+        disconnectBtn.addEventListener('click', () => {
+            if (socket) {
+                socket.close();
+            }
+        });
+        
+        sendBtn.addEventListener('click', () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const message = messageInput.value.trim();
+                if (message) {
+                    socket.send(JSON.stringify({ message: message }));
+                    addMessage(`发送消息: ${message}`, 'info');
+                    messageInput.value = '';
+                }
+            }
+        });
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>

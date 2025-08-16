@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据分析Agent调试监控</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .log-entry {
+            border-left: 4px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .log-entry:hover {
+            background-color: #f9fafb;
+        }
+        .llm-input {
+            border-left-color: #3b82f6;
+        }
+        .llm-output {
+            border-left-color: #10b981;
+        }
+        .mcp-input {
+            border-left-color: #8b5cf6;
+        }
+        .mcp-output {
+            border-left-color: #f59e0b;
+        }
+        .error {
+            border-left-color: #ef4444;
+        }
+        .log-content {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        /* 添加深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1f2937;
+                color: #f9fafb;
+            }
+            .bg-white {
+                background-color: #374151;
+            }
+            .bg-gray-50 {
+                background-color: #4b5563;
+            }
+            .text-gray-700 {
+                color: #f9fafb;
+            }
+            .text-gray-600 {
+                color: #d1d5db;
+            }
+            .border-gray-200 {
+                border-color: #6b7280;
+            }
+            .log-entry:hover {
+                background-color: #4b5563;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">数据分析Agent调试监控</h1>
+            <p class="text-gray-600 mt-2">实时监控Agent生成的prompt、LLM输入输出和MCP工具调用</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
+            <div class="border-b p-4 bg-gray-50 flex justify-between items-center">
+                <h2 class="text-xl font-semibold">调试日志</h2>
+                <div class="flex space-x-2">
+                    <button id="refresh-logs" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-sync-alt mr-2"></i>刷新日志
+                    </button>
+                    <button id="clear-logs" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-trash-alt mr-2"></i>清空日志
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 日志统计 -->
+            <div class="p-4 border-b bg-gray-50 grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="bg-blue-100 text-blue-800 p-3 rounded-lg text-center">
+                    <div class="text-2xl font-bold" id="llm-input-count">0</div>
+                    <div class="text-sm">LLM输入</div>
+                </div>
+                <div class="bg-green-100 text-green-800 p-3 rounded-lg text-center">
+                    <div class="text-2xl font-bold" id="llm-output-count">0</div>
+                    <div class="text-sm">LLM输出</div>
+                </div>
+                <div class="bg-purple-100 text-purple-800 p-3 rounded-lg text-center">
+                    <div class="text-2xl font-bold" id="mcp-input-count">0</div>
+                    <div class="text-sm">MCP输入</div>
+                </div>
+                <div class="bg-yellow-100 text-yellow-800 p-3 rounded-lg text-center">
+                    <div class="text-2xl font-bold" id="mcp-output-count">0</div>
+                    <div class="text-sm">MCP输出</div>
+                </div>
+                <div class="bg-red-100 text-red-800 p-3 rounded-lg text-center">
+                    <div class="text-2xl font-bold" id="error-count">0</div>
+                    <div class="text-sm">错误</div>
+                </div>
+            </div>
+            
+            <!-- 日志过滤 -->
+            <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-4">
+                <div class="flex items-center">
+                    <input type="checkbox" id="filter-llm-input" class="mr-2" checked>
+                    <label for="filter-llm-input" class="text-sm">LLM输入</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="filter-llm-output" class="mr-2" checked>
+                    <label for="filter-llm-output" class="text-sm">LLM输出</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="filter-mcp-input" class="mr-2" checked>
+                    <label for="filter-mcp-input" class="text-sm">MCP输入</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="filter-mcp-output" class="mr-2" checked>
+                    <label for="filter-mcp-output" class="text-sm">MCP输出</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="filter-error" class="mr-2" checked>
+                    <label for="filter-error" class="text-sm">错误</label>
+                </div>
+            </div>
+            
+            <!-- 会话选择 -->
+            <div class="p-4 border-b bg-gray-50">
+                <div class="flex items-center">
+                    <label class="block text-gray-700 text-sm font-bold mr-2">会话:</label>
+                    <select id="session-select" class="shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                        <option value="">所有会话</option>
+                    </select>
+                    <button id="refresh-sessions" class="ml-2 bg-gray-500 hover:bg-gray-600 text-white font-medium py-1 px-3 rounded-lg transition duration-200 text-sm">
+                        <i class="fas fa-sync-alt mr-1"></i>刷新会话
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 日志列表 -->
+            <div id="logs-container" class="p-4 h-96 overflow-y-auto">
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                    <p>暂无调试日志</p>
+                    <p class="text-sm mt-1">与Agent交互或刷新日志以查看调试信息</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- WebSocket实时监控 -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="border-b p-4 bg-gray-50">
+                <h2 class="text-xl font-semibold">实时监控</h2>
+                <p class="text-gray-600 text-sm mt-1">通过WebSocket连接实时接收调试信息</p>
+            </div>
+            
+            <div class="p-4">
+                <div class="flex items-center mb-4">
+                    <div class="flex-1">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="websocket-url">
+                            WebSocket服务器地址
+                        </label>
+                        <input 
+                            id="websocket-url" 
+                            type="text" 
+                            value="ws://localhost:8082/api/ws" 
+                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        >
+                    </div>
+                    <div class="ml-4 flex items-end">
+                        <button 
+                            id="websocket-toggle" 
+                            class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200 h-full"
+                        >
+                            连接
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        连接状态
+                    </label>
+                    <div id="websocket-status" class="text-center py-2 px-4 rounded bg-gray-200">
+                        未连接
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                        实时日志
+                    </label>
+                    <div 
+                        id="websocket-logs" 
+                        class="h-48 overflow-y-auto border rounded p-3 bg-gray-50"
+                    ></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM元素
+        const refreshLogsBtn = document.getElementById('refresh-logs');
+        const clearLogsBtn = document.getElementById('clear-logs');
+        const logsContainer = document.getElementById('logs-container');
+        const websocketUrl = document.getElementById('websocket-url');
+        const websocketToggle = document.getElementById('websocket-toggle');
+        const websocketStatus = document.getElementById('websocket-status');
+        const websocketLogs = document.getElementById('websocket-logs');
+        const sessionSelect = document.getElementById('session-select');
+        const refreshSessionsBtn = document.getElementById('refresh-sessions');
+        
+        // 过滤器元素
+        const filterLlmInput = document.getElementById('filter-llm-input');
+        const filterLlmOutput = document.getElementById('filter-llm-output');
+        const filterMcpInput = document.getElementById('filter-mcp-input');
+        const filterMcpOutput = document.getElementById('filter-mcp-output');
+        const filterError = document.getElementById('filter-error');
+        
+        // 统计元素
+        const llmInputCount = document.getElementById('llm-input-count');
+        const llmOutputCount = document.getElementById('llm-output-count');
+        const mcpInputCount = document.getElementById('mcp-input-count');
+        const mcpOutputCount = document.getElementById('mcp-output-count');
+        const errorCount = document.getElementById('error-count');
+        
+        // WebSocket连接
+        let socket = null;
+        let currentSessionId = null;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshLogs();
+            refreshSessions();
+        });
+        
+        // 刷新日志
+        async function refreshLogs() {
+            try {
+                const selectedSessionId = sessionSelect.value;
+                let url = '/api/debug/logs';
+                
+                // 如果选择了特定会话，使用会话特定的API端点
+                if (selectedSessionId) {
+                    url = `/api/debug/logs/${selectedSessionId}`;
+                }
+                
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayLogs(data.logs || []);
+                } else {
+                    console.error('获取日志失败:', response.status);
+                }
+            } catch (error) {
+                console.error('获取日志时出错:', error);
+            }
+        }
+        
+        // 刷新会话列表
+        async function refreshSessions() {
+            try {
+                const response = await fetch('/api/debug/sessions');
+                if (response.ok) {
+                    const data = await response.json();
+                    displaySessions(data.sessions || []);
+                } else {
+                    console.error('获取会话列表失败:', response.status);
+                }
+            } catch (error) {
+                console.error('获取会话列表时出错:', error);
+            }
+        }
+        
+        // 显示会话列表
+        function displaySessions(sessions) {
+            // 保存当前选择的会话ID
+            const currentSelection = sessionSelect.value;
+            
+            // 清空选择器，但保留"所有会话"选项
+            sessionSelect.innerHTML = '<option value="">所有会话</option>';
+            
+            // 按开始时间排序（最新的在前）
+            sessions.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+            
+            // 添加会话选项
+            sessions.forEach(session => {
+                const option = document.createElement('option');
+                option.value = session.session_id;
+                const startTime = new Date(session.start_time).toLocaleString();
+                option.textContent = `${startTime} (${session.log_count} 条日志)`;
+                sessionSelect.appendChild(option);
+            });
+            
+            // 恢复之前的选择（如果仍然有效）
+            if (currentSelection && sessions.some(s => s.session_id === currentSelection)) {
+                sessionSelect.value = currentSelection;
+            }
+            
+            // 如果之前没有选择，但有WebSocket会话，选择它
+            if (!sessionSelect.value && currentSessionId) {
+                sessionSelect.value = currentSessionId;
+            }
+        }
+        
+        // 清空日志
+        async function clearLogs() {
+            try {
+                const response = await fetch('/api/debug/clear', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    refreshLogs();
+                    addWebsocketLog('调试日志已清空', 'info');
+                } else {
+                    console.error('清空日志失败:', response.status);
+                }
+            } catch (error) {
+                console.error('清空日志时出错:', error);
+            }
+        }
+        
+        // 显示日志
+        function displayLogs(logs) {
+            // 重置统计
+            let llmInput = 0, llmOutput = 0, mcpInput = 0, mcpOutput = 0, errors = 0;
+            
+            if (!logs || logs.length === 0) {
+                logsContainer.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-inbox text-4xl mb-2"></i>
+                        <p>暂无调试日志</p>
+                        <p class="text-sm mt-1">与Agent交互或刷新日志以查看调试信息</p>
+                    </div>
+                `;
+                updateStats(0, 0, 0, 0, 0);
+                return;
+            }
+            
+            // 过滤日志
+            const filteredLogs = logs.filter(log => {
+                switch (log.type) {
+                    case 'llm_input':
+                        return filterLlmInput.checked;
+                    case 'llm_output':
+                        return filterLlmOutput.checked;
+                    case 'mcp_input':
+                        return filterMcpInput.checked;
+                    case 'mcp_output':
+                        return filterMcpOutput.checked;
+                    case 'error':
+                        return filterError.checked;
+                    default:
+                        return true;
+                }
+            });
+            
+            // 统计各类日志
+            logs.forEach(log => {
+                switch (log.type) {
+                    case 'llm_input':
+                        llmInput++;
+                        break;
+                    case 'llm_output':
+                        llmOutput++;
+                        break;
+                    case 'mcp_input':
+                        mcpInput++;
+                        break;
+                    case 'mcp_output':
+                        mcpOutput++;
+                        break;
+                    case 'error':
+                        errors++;
+                        break;
+                }
+            });
+            
+            // 更新统计显示
+            updateStats(llmInput, llmOutput, mcpInput, mcpOutput, errors);
+            
+            if (filteredLogs.length === 0) {
+                logsContainer.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fas fa-filter text-4xl mb-2"></i>
+                        <p>没有匹配的日志</p>
+                        <p class="text-sm mt-1">请调整过滤条件以查看日志</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 生成日志HTML
+            let logsHtml = '';
+            filteredLogs.forEach(log => {
+                logsHtml += createLogEntryHtml(log);
+            });
+            
+            logsContainer.innerHTML = logsHtml;
+        }
+        
+        // 创建日志条目HTML
+        function createLogEntryHtml(log) {
+            let icon = '';
+            let title = '';
+            let content = '';
+            let typeClass = '';
+            
+            switch (log.type) {
+                case 'llm_input':
+                    icon = '<i class="fas fa-arrow-right text-blue-500"></i>';
+                    title = 'LLM输入';
+                    content = log.prompt || JSON.stringify(log.context || {}, null, 2);
+                    typeClass = 'llm-input';
+                    break;
+                case 'llm_output':
+                    icon = '<i class="fas fa-arrow-left text-green-500"></i>';
+                    title = 'LLM输出';
+                    content = log.output || '';
+                    typeClass = 'llm-output';
+                    break;
+                case 'mcp_input':
+                    icon = '<i class="fas fa-arrow-circle-right text-purple-500"></i>';
+                    title = `MCP输入 - ${log.tool_name}`;
+                    content = JSON.stringify(log.parameters || {}, null, 2);
+                    typeClass = 'mcp-input';
+                    break;
+                case 'mcp_output':
+                    icon = '<i class="fas fa-arrow-circle-left text-yellow-500"></i>';
+                    title = `MCP输出 - ${log.tool_name}`;
+                    content = JSON.stringify(log.output || {}, null, 2);
+                    typeClass = 'mcp-output';
+                    break;
+                case 'error':
+                    icon = '<i class="fas fa-exclamation-circle text-red-500"></i>';
+                    title = '错误';
+                    content = `${log.error_type}: ${log.error}`;
+                    typeClass = 'error';
+                    break;
+                default:
+                    icon = '<i class="fas fa-info-circle text-gray-500"></i>';
+                    title = log.type;
+                    content = JSON.stringify(log, null, 2);
+            }
+            
+            // 格式化时间
+            const timestamp = new Date(log.timestamp).toLocaleString();
+            
+            return `
+                <div class="log-entry ${typeClass} mb-3 p-3 rounded-lg border bg-white">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center">
+                            ${icon}
+                            <span class="font-semibold ml-2">${title}</span>
+                        </div>
+                        <span class="text-xs text-gray-500">${timestamp}</span>
+                    </div>
+                    <div class="log-content mt-2 text-sm bg-gray-50 p-2 rounded">
+                        <pre class="whitespace-pre-wrap break-words">${escapeHtml(content.substring(0, 1000))}${content.length > 1000 ? '...' : ''}</pre>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 更新统计显示
+        function updateStats(llmIn, llmOut, mcpIn, mcpOut, errs) {
+            llmInputCount.textContent = llmIn;
+            llmOutputCount.textContent = llmOut;
+            mcpInputCount.textContent = mcpIn;
+            mcpOutputCount.textContent = mcpOut;
+            errorCount.textContent = errs;
+        }
+        
+        // 转义HTML特殊字符
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        // 添加WebSocket日志
+        function addWebsocketLog(content, type = 'info') {
+            const logDiv = document.createElement('div');
+            logDiv.classList.add('mb-2', 'p-2', 'rounded');
+            
+            const timestamp = new Date().toLocaleTimeString();
+            
+            switch (type) {
+                case 'info':
+                    logDiv.classList.add('bg-blue-100', 'text-blue-800');
+                    break;
+                case 'success':
+                    logDiv.classList.add('bg-green-100', 'text-green-800');
+                    break;
+                case 'error':
+                    logDiv.classList.add('bg-red-100', 'text-red-800');
+                    break;
+                case 'debug':
+                    logDiv.classList.add('bg-purple-100', 'text-purple-800');
+                    break;
+            }
+            
+            logDiv.innerHTML = `<span class="font-semibold">[${timestamp}]</span> ${escapeHtml(content)}`;
+            websocketLogs.appendChild(logDiv);
+            websocketLogs.scrollTop = websocketLogs.scrollHeight;
+        }
+        
+        // 更新WebSocket状态显示
+        function updateWebsocketStatus(text, type = 'default') {
+            websocketStatus.textContent = text;
+            websocketStatus.className = 'text-center py-2 px-4 rounded';
+            
+            switch (type) {
+                case 'connected':
+                    websocketStatus.classList.add('bg-green-200', 'text-green-800');
+                    break;
+                case 'disconnected':
+                    websocketStatus.classList.add('bg-gray-200', 'text-gray-800');
+                    break;
+                case 'error':
+                    websocketStatus.classList.add('bg-red-200', 'text-red-800');
+                    break;
+                default:
+                    websocketStatus.classList.add('bg-gray-200', 'text-gray-800');
+            }
+        }
+        
+        // 切换WebSocket连接
+        function toggleWebsocket() {
+            if (socket) {
+                socket.close();
+                return;
+            }
+            
+            try {
+                socket = new WebSocket(websocketUrl.value);
+                
+                socket.onopen = () => {
+                    updateWebsocketStatus('已连接', 'connected');
+                    addWebsocketLog('WebSocket连接已建立', 'success');
+                    websocketToggle.textContent = '断开';
+                };
+                
+                socket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'debug_update' && data.debug_logs) {
+                            // 更新当前会话ID
+                            if (data.session_id) {
+                                currentSessionId = data.session_id;
+                            }
+                            
+                            // 实时添加调试日志
+                            data.debug_logs.forEach(log => {
+                                const logEntryHtml = createLogEntryHtml(log);
+                                logsContainer.insertAdjacentHTML('afterbegin', logEntryHtml);
+                                
+                                // 添加到WebSocket日志
+                                addWebsocketLog(`接收到调试日志: ${log.type}`, 'debug');
+                            });
+                            
+                            // 刷新会话列表
+                            refreshSessions();
+                        } else if (data.response) {
+                            // 更新当前会话ID
+                            if (data.session_id) {
+                                currentSessionId = data.session_id;
+                            }
+                            
+                            addWebsocketLog(`接收到响应: ${data.response.substring(0, 100)}...`, 'info');
+                            
+                            // 刷新会话列表
+                            refreshSessions();
+                        }
+                    } catch (e) {
+                        addWebsocketLog(`收到消息: ${event.data}`, 'info');
+                    }
+                };
+                
+                socket.onclose = () => {
+                    updateWebsocketStatus('未连接', 'disconnected');
+                    addWebsocketLog('WebSocket连接已关闭', 'info');
+                    socket = null;
+                    websocketToggle.textContent = '连接';
+                };
+                
+                socket.onerror = (error) => {
+                    updateWebsocketStatus('连接错误', 'error');
+                    addWebsocketLog(`WebSocket错误: ${error.message}`, 'error');
+                };
+            } catch (error) {
+                updateWebsocketStatus('连接失败', 'error');
+                addWebsocketLog(`连接失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 事件监听器
+        refreshLogsBtn.addEventListener('click', refreshLogs);
+        clearLogsBtn.addEventListener('click', clearLogs);
+        websocketToggle.addEventListener('click', toggleWebsocket);
+        refreshSessionsBtn.addEventListener('click', refreshSessions);
+        sessionSelect.addEventListener('change', refreshLogs);
+        
+        // 过滤器变化时刷新显示
+        [filterLlmInput, filterLlmOutput, filterMcpInput, filterMcpOutput, filterError].forEach(filter => {
+            filter.addEventListener('change', () => {
+                refreshLogs(); // 重新获取并过滤日志
+            });
+        });
+    </script>
+</body>
+</html>
