@@ -251,7 +251,7 @@ data-cli test-investment
 2. **Web API检查**：启动Web服务后访问以下端点：
    - `http://localhost:8084/api/status` - 系统整体状态
    - `http://localhost:8084/api/mcp/status` - MCP服务状态
-3. **Web界面监控**：访问调试监控页面 `http://localhost:8083/debug-monitor.html` 查看实时日志
+3. **Web界面监控**：访问调试监控页面 `http://localhost:8084/debug-monitor.html` 查看实时日志
 
 ### 相对时间表达式示例
 Agent支持以下相对时间表达式：
