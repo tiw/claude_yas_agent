@@ -114,17 +114,17 @@ DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 Agent支持以下MCP服务：
 
-1. **SEC财报数据服务** (端口 9000)
+1. **SEC财报数据服务** (端口 8000)
    - 功能: SEC财报数据、13F机构数据、系统资源监控
-   - 端点: http://localhost:9000/mcp
+   - 端点: http://localhost:8000/mcp
 
-2. **投资分析服务** (端口 9001)
+2. **投资分析服务** (端口 8001)
    - 功能: 巴菲特风格投资分析、内在价值计算
-   - 端点: http://localhost:9001/mcp
+   - 端点: http://localhost:8001/mcp
 
-3. **股票查询服务** (端口 9002)
+3. **股票查询服务** (端口 8002)
    - 功能: Alpha Vantage股票数据、实时行情
-   - 端点: http://localhost:9002/mcp
+   - 端点: http://localhost:8002/mcp
 
 在 `.env` 文件中配置MCP API密钥：
 
@@ -191,6 +191,27 @@ config = AgentConfig(
 agent = DataAnalysisAgent(config)
 ```
 
+### 统一命令行工具
+
+系统现在提供了一个统一的命令行工具，整合了所有CLI功能：
+
+```bash
+# 查看帮助信息
+python -m data_agent.unified_cli --help
+
+# 数据分析查询
+python -m data_agent.unified_cli query "分析苹果公司最近的财务数据"
+
+# 系统状态检查
+python -m data_agent.unified_cli status
+
+# MCP连通性测试
+python -m data_agent.unified_cli test-mcp
+
+# 投资分析测试
+python -m data_agent.unified_cli test-investment
+```
+
 ## 使用示例
 
 ### 基本使用
@@ -206,7 +227,31 @@ python -m data_agent.test_investment
 
 # 使用CLI工具
 python -m data_agent.cli "分析苹果公司最近的财务数据"
+
+# 检查系统状态
+python -m data_agent.check_status
+
+# 使用统一CLI工具
+python -m data_agent.unified_cli query "分析苹果公司最近的财务数据"
+python -m data_agent.unified_cli status
+python -m data_agent.unified_cli test-mcp
+python -m data_agent.unified_cli test-investment
+
+# 使用安装后的CLI命令 (安装后)
+data-cli query "分析苹果公司最近的财务数据"
+data-cli status
+data-cli test-mcp
+data-cli test-investment
 ```
+
+### 系统状态检查
+系统提供了多种方式来检查MCP服务和依赖状态：
+
+1. **命令行检查**：运行 `python -m data_agent.check_status` 查看系统状态
+2. **Web API检查**：启动Web服务后访问以下端点：
+   - `http://localhost:8084/api/status` - 系统整体状态
+   - `http://localhost:8084/api/mcp/status` - MCP服务状态
+3. **Web界面监控**：访问调试监控页面 `http://localhost:8083/debug-monitor.html` 查看实时日志
 
 ### 相对时间表达式示例
 Agent支持以下相对时间表达式：
@@ -235,10 +280,10 @@ cd data_agent/webclient
 python server.py
 ```
 
-访问 `http://localhost:8083` 使用Web聊天界面与数据分析Agent交互。
+访问 `http://localhost:8084` 使用Web聊天界面与数据分析Agent交互。
 
 ### 调试监控使用
-访问 `http://localhost:8083/debug-monitor.html` 查看调试监控界面：
+访问 `http://localhost:8084/debug-monitor.html` 查看调试监控界面：
 - 实时查看LLM输入输出和MCP调用详情
 - 按会话分组查看分析过程
 - 统计信息展示和日志过滤

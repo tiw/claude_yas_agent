@@ -27,7 +27,7 @@ async def test_mcp_client():
         "mcpServers": {
             "sec-fetch-production": {
                 "type": "sse",
-                "url": "http://localhost:9000/mcp",
+                "url": "http://localhost:8000/mcp",
                 "headers": {
                     "X-API-Key": os.getenv("MCP_API_KEY", "your-api-key-here")
                 },
@@ -35,7 +35,7 @@ async def test_mcp_client():
             },
             "sec-investment-analysis": {
                 "type": "sse",
-                "url": "http://localhost:9001/mcp",
+                "url": "http://localhost:8001/mcp",
                 "headers": {
                     "X-API-Key": os.getenv("MCP_INVESTMENT_API_KEY", "your-api-key-here")
                 },
@@ -43,7 +43,7 @@ async def test_mcp_client():
             },
             "sec-stock-query": {
                 "type": "sse",
-                "url": "http://localhost:9002/mcp",
+                "url": "http://localhost:8002/mcp",
                 "headers": {
                     "X-API-Key": os.getenv("ALPHA_VANTAGE_KEY", "your-alpha-vantage-key")
                 },

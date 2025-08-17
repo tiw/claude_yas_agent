@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional, Callable
 from datetime import datetime, timedelta
 from data_agent.mcp_tools.mcp_client import MCPClient
+from data_agent.mcp_tools.mcp_config import MCPConfigManager, MCPServerConfig, ServerType
 from data_agent.utils.debug import DebugManager
 from data_agent.prompts.prompt_manager import PromptManager
 from data_agent.llm.llm_manager import LLMManager
@@ -34,34 +35,21 @@ class DataAnalysisAgent:
         if config.mcp_config:
             mcp_config = config.mcp_config
         else:
-            mcp_config = {
-                "mcpServers": {
-                    "sec-fetch-production": {
-                        "type": "sse",
-                        "url": "http://localhost:9000/mcp",
-                        "headers": {
-                            "X-API-Key": os.getenv("MCP_API_KEY", "your-api-key-here")
-                        },
-                        "serverInstructions": "SEC财报数据分析服务，支持完整的13F和财务数据查询"
-                    },
-                    "sec-investment-analysis": {
-                        "type": "sse",
-                        "url": "http://localhost:9001/mcp",
-                        "headers": {
-                            "X-API-Key": os.getenv("MCP_INVESTMENT_API_KEY", "your-api-key-here")
-                        },
-                        "serverInstructions": "SEC投资分析服务，提供巴菲特风格的投资分析功能"
-                    },
-                    "sec-stock-query": {
-                        "type": "sse",
-                        "url": "http://localhost:9002/mcp",
-                        "headers": {
-                            "X-API-Key": os.getenv("ALPHA_VANTAGE_KEY", "your-alpha-vantage-key")
-                        },
-                        "serverInstructions": "Alpha Vantage股票查询服务，提供实时股票数据和技术分析"
-                    }
-                }
-            }
+            # 使用新的配置管理器创建默认配置
+            config_manager = MCPConfigManager()
+            default_servers = config_manager.create_default_servers()
+            # 更新端口为800x系列
+            for server in default_servers.values():
+                if server.server_type == ServerType.SEC_FETCH:
+                    server.url = "http://localhost:8000/mcp"
+                elif server.server_type == ServerType.INVESTMENT_ANALYSIS:
+                    server.url = "http://localhost:8001/mcp"
+                elif server.server_type == ServerType.STOCK_QUERY:
+                    server.url = "http://localhost:8002/mcp"
+            
+            config_manager.servers = default_servers
+            mcp_config = config_manager.get_mcp_client_config()
+            
         self.mcp_client = MCPClient(mcp_config)
         self.debug_manager = DebugManager(enabled=config.debug_mode, langfuse_enabled=config.langfuse_enabled)
         self.prompt_manager = PromptManager()

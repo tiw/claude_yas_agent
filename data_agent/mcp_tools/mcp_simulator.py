@@ -206,24 +206,26 @@ async def create_app():
     
     return app
 
-async def start_servers():
+async def start_servers(host='localhost', ports=None):
     """启动所有MCP服务"""
-    servers = [
-        (9000, "sec-fetch-production"),
-        (9001, "sec-investment-analysis"),
-        (9002, "sec-stock-query")
-    ]
+    if ports is None:
+        # 默认使用800x端口系列
+        ports = {
+            "sec-fetch-production": 8000,
+            "sec-investment-analysis": 8001,
+            "sec-stock-query": 8002
+        }
     
     runners = []
     
-    for port, server_name in servers:
+    for server_name, port in ports.items():
         app = await create_app()
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, 'localhost', port)
+        site = web.TCPSite(runner, host, port)
         await site.start()
         runners.append(runner)
-        print(f"MCP服务 {server_name} 已启动在 http://localhost:{port}")
+        print(f"MCP服务 {server_name} 已启动在 http://{host}:{port}")
     
     print("所有MCP服务已启动。按 Ctrl+C 停止。")
     

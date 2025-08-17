@@ -37,6 +37,8 @@ class WebService:
         # API路由
         self.app.router.add_post('/api/chat', self.chat)
         self.app.router.add_get('/api/health', self.health_check)
+        self.app.router.add_get('/api/status', self.system_status)
+        self.app.router.add_get('/api/mcp/status', self.mcp_status)
         self.app.router.add_get('/api/debug/logs', self.get_debug_logs)
         self.app.router.add_get('/api/debug/logs/{session_id}', self.get_debug_logs_by_session)
         self.app.router.add_get('/api/debug/sessions', self.get_debug_sessions)
@@ -88,6 +90,101 @@ class WebService:
             "service": "data-analysis-agent-web",
             "timestamp": asyncio.get_event_loop().time()
         })
+    
+    async def system_status(self, request):
+        """系统状态检查"""
+        try:
+            if not self.agent:
+                await self.initialize_agent()
+                if not self.agent:
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Agent初始化失败"
+                    }, status=500)
+            
+            # 检查Agent组件状态
+            status_info = {
+                "status": "running",
+                "components": {
+                    "agent": "initialized",
+                    "mcp_client": "available" if self.agent.mcp_client else "unavailable",
+                    "llm_manager": "available" if self.agent.llm_manager else "unavailable",
+                    "debug_manager": "available" if self.agent.debug_manager else "unavailable",
+                    "prompt_manager": "available" if self.agent.prompt_manager else "unavailable"
+                },
+                "configuration": {
+                    "debug_mode": self.agent.config.debug_mode,
+                    "default_llm": self.agent.config.default_llm,
+                    "langfuse_enabled": self.agent.config.langfuse_enabled
+                }
+            }
+            
+            # 如果MCP客户端可用，检查服务器状态
+            if self.agent.mcp_client:
+                status_info["mcp_servers"] = {}
+                for server_name, server_info in self.agent.mcp_client.server_info.items():
+                    status_info["mcp_servers"][server_name] = {
+                        "url": server_info.get("url"),
+                        "healthy": server_info.get("healthy", False),
+                        "instructions": server_info.get("instructions", "")
+                    }
+            
+            return web.json_response(status_info)
+            
+        except Exception as e:
+            logger.error(f"获取系统状态时出错: {e}")
+            return web.json_response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
+    
+    async def mcp_status(self, request):
+        """MCP状态检查"""
+        try:
+            if not self.agent:
+                await self.initialize_agent()
+                if not self.agent:
+                    return web.json_response({
+                        "status": "error",
+                        "message": "Agent初始化失败"
+                    }, status=500)
+            
+            if not self.agent.mcp_client:
+                return web.json_response({
+                    "status": "error",
+                    "message": "MCP客户端未初始化"
+                }, status=500)
+            
+            # 获取MCP服务器状态
+            mcp_status = {
+                "status": "success",
+                "servers": {},
+                "available_tools": self.agent.mcp_client.get_available_tools()
+            }
+            
+            for server_name, server_info in self.agent.mcp_client.server_info.items():
+                mcp_status["servers"][server_name] = {
+                    "url": server_info.get("url"),
+                    "healthy": server_info.get("healthy", False),
+                    "instructions": server_info.get("instructions", ""),
+                    "tools": []  # 可以扩展为从服务器动态获取工具列表
+                }
+            
+            # 统计信息
+            mcp_status["summary"] = {
+                "total_servers": len(mcp_status["servers"]),
+                "healthy_servers": len([s for s in mcp_status["servers"].values() if s["healthy"]]),
+                "available_tools": len(mcp_status["available_tools"])
+            }
+            
+            return web.json_response(mcp_status)
+            
+        except Exception as e:
+            logger.error(f"获取MCP状态时出错: {e}")
+            return web.json_response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
     
     async def get_debug_logs(self, request):
         """获取调试日志"""
@@ -271,7 +368,7 @@ class WebService:
         
         return ws
     
-    def run(self, host='localhost', port=8083):
+    def run(self, host='localhost', port=8084):
         """启动Web服务"""
         # 设置路由
         self.setup_routes()
@@ -289,8 +386,8 @@ def main():
     """主函数"""
     service = WebService()
     print(f"正在启动Web服务...")
-    print(f"访问地址: http://localhost:8083")
-    print(f"WebSocket地址: ws://localhost:8083/api/ws")
+    print(f"访问地址: http://localhost:8084")
+    print(f"WebSocket地址: ws://localhost:8084/api/ws")
     service.run()
 
 if __name__ == "__main__":

@@ -67,24 +67,10 @@ class MCPClient:
     
     def get_available_tools(self) -> List[str]:
         """获取可用的MCP工具列表"""
-        # 返回示例工具列表，实际应用中应该从MCP服务动态获取
-        return [
-            # 通用MCP服务工具
-            "sec_financial_data_query",
-            "sec_13f_institutional_data",
-            "system_resource_monitor",
-            
-            # 投资分析MCP服务工具
-            "buffett_style_analysis",
-            "intrinsic_value_calculation",
-            "investment_risk_assessment",
-            
-            # 股票查询MCP服务工具
-            "stock_price_query",
-            "technical_analysis",
-            "fundamental_analysis",
-            "real_time_market_data"
-        ]
+        # 从服务器信息动态获取可用工具
+        # 这里返回配置中定义的工具列表
+        tool_to_server_mapping = self._get_tool_to_server_mapping()
+        return list(tool_to_server_mapping.keys())
         
     def get_server_instructions(self) -> Dict[str, str]:
         """获取各服务器的使用说明"""
@@ -127,9 +113,9 @@ class MCPClient:
             # 尝试恢复机制
             return await self._recover_from_error(tool_name, parameters, e)
             
-    async def _find_server_for_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
-        """为工具查找合适的服务器"""
-        # 根据工具名称匹配服务器
+    def _get_tool_to_server_mapping(self) -> Dict[str, str]:
+        """获取工具到服务器的映射"""
+        # 使用固定的工具到服务器映射
         tool_to_server_mapping = {
             # 通用MCP服务工具
             "sec_financial_data_query": "sec-fetch-production",
@@ -147,7 +133,12 @@ class MCPClient:
             "fundamental_analysis": "sec-stock-query",
             "real_time_market_data": "sec-stock-query"
         }
-        
+        return tool_to_server_mapping
+    
+    async def _find_server_for_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """为工具查找合适的服务器"""
+        # 根据工具名称匹配服务器
+        tool_to_server_mapping = self._get_tool_to_server_mapping()
         server_name = tool_to_server_mapping.get(tool_name)
         if server_name and server_name in self.server_info:
             server_info = self.server_info[server_name]

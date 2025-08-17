@@ -32,6 +32,7 @@ setup(
     entry_points={
         "console_scripts": [
             "data-agent=data_agent.cli:main",
+            "data-cli=data_agent.unified_cli:main",
         ],
     },
     package_data={
