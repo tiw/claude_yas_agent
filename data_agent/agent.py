@@ -6,6 +6,12 @@ from data_agent.mcp_tools.mcp_client import MCPClient
 from data_agent.utils.debug import DebugManager
 from data_agent.prompts.prompt_manager import PromptManager
 from data_agent.llm.llm_manager import LLMManager
+from data_agent.utils.observability import ObservabilityManager
+from data_agent.utils.security import SecurityManager
+from data_agent.memory import MemoryManager
+from data_agent.planning import ProjectPlanner
+from data_agent.multi_agent import SubAgentManager
+from data_agent.reflection import ReflectionEngine
 from pydantic import BaseModel
 import json
 import os
@@ -60,34 +66,50 @@ class DataAnalysisAgent:
         self.debug_manager = DebugManager(enabled=config.debug_mode, langfuse_enabled=config.langfuse_enabled)
         self.prompt_manager = PromptManager()
         self.llm_manager = LLMManager(default_model=config.default_llm)
+        self.observability = ObservabilityManager()
+        self.security = SecurityManager()
+        self.memory = MemoryManager()
+        self.planner = ProjectPlanner()
+        self.sub_agent_manager = SubAgentManager(self)
+        self.reflection_engine = ReflectionEngine(self)
         self.conversation_history = []
         
-    async def process_query(self, user_input: str) -> str:
-        """处理用户查询"""
-        try:
-            # 开始新的调试会话
-            session_id = self.debug_manager.start_new_session()
+    async def process_query(self, user_input: str, user_id: str = "anonymous") -> str:
+        """处理用户查询（带安全检查）"""
+        # 检查速率限制
+        if not self.security.check_rate_limit(user_id):
+            raise Exception("请求过于频繁，请稍后再试")
+        
+        # 记录访问日志
+        self.security.log_access(user_id, "process_query", "data_analysis")
+        
+        with self.observability.tracer.start_as_current_span("process_query"):
+            self.observability.record_query("data_analysis")
             
-            # 记录用户输入
-            self.conversation_history.append({"role": "user", "content": user_input})
-            self.debug_manager.log_llm_input(user_input, self.conversation_history)
-            
-            # 解析用户意图和参数
-            parsed_query = await self._parse_query(user_input)
-            
-            # 执行数据分析
-            result = await self._execute_analysis(parsed_query)
-            
-            # 记录结果
-            self.conversation_history.append({"role": "assistant", "content": result})
-            self.debug_manager.log_llm_output(result)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"处理查询时出错: {e}")
-            self.debug_manager.log_error(e)
-            return f"处理查询时出错: {str(e)}"
+            try:
+                # 开始新的调试会话
+                session_id = self.debug_manager.start_new_session()
+                
+                # 记录用户输入
+                self.conversation_history.append({"role": "user", "content": user_input})
+                self.debug_manager.log_llm_input(user_input, self.conversation_history)
+                
+                # 解析用户意图和参数
+                parsed_query = await self._parse_query(user_input)
+                
+                # 执行数据分析
+                result = await self._execute_analysis(parsed_query)
+                
+                # 记录结果
+                self.conversation_history.append({"role": "assistant", "content": result})
+                self.debug_manager.log_llm_output(result)
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"处理查询时出错: {e}")
+                self.debug_manager.log_error(e)
+                return f"处理查询时出错: {str(e)}"
     
     async def _parse_query(self, user_input: str) -> Dict[str, Any]:
         """解析用户查询"""
@@ -220,6 +242,7 @@ class DataAnalysisAgent:
                     self.debug_manager.log_mcp_input(tool_name, tool_params)
                     tool_result = await mcp_client.call_tool(tool_name, tool_params)
                     self.debug_manager.log_mcp_output(tool_name, tool_result)
+                    self.observability.record_mcp_call(tool_name)
                     
                     results.append({
                         "tool": tool_name,
@@ -229,6 +252,7 @@ class DataAnalysisAgent:
                 except Exception as e:
                     logger.error(f"调用MCP工具 {tool_name} 时出错: {e}")
                     self.debug_manager.log_error(e)
+                    self.observability.record_mcp_call(tool_name)
                     # 尝试恢复或继续执行其他工具
                     results.append({
                         "tool": tool_name,
@@ -273,6 +297,7 @@ class DataAnalysisAgent:
     async def _call_llm(self, prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """调用LLM"""
         self.debug_manager.log_llm_input(prompt, context)
+        self.observability.record_llm_call(self.config.default_llm)
         
         try:
             # 调用实际的LLM

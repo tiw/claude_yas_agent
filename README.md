@@ -64,7 +64,22 @@ pip install -r requirements.txt
 
 ## 使用方法
 
-### 基本使用
+### 命令行工具 (CLI)
+```bash
+# 基本使用
+data-agent "分析苹果公司最近的财务数据"
+
+# 调试模式
+data-agent --debug "获取特斯拉的实时股价"
+
+# 指定模型
+data-agent --model deepseek "比较两家公司的投资价值"
+
+# JSON格式输出
+data-agent --format json "分析用户行为数据"
+```
+
+### 编程接口
 ```python
 from data_agent.agent import DataAnalysisAgent, AgentConfig
 
@@ -188,6 +203,9 @@ python -m data_agent.demo
 
 # 运行投资分析测试
 python -m data_agent.test_investment
+
+# 使用CLI工具
+python -m data_agent.cli "分析苹果公司最近的财务数据"
 ```
 
 ### 相对时间表达式示例
@@ -317,3 +335,16 @@ data_agent/
 - **API简化**：借鉴Pydantic-AI的简洁API设计
 - **工具装饰器**：实现类似`@agent.tool`的工具定义方式
 - **依赖注入**：支持灵活的运行时依赖注入机制
+
+### Claude Code理念改进
+基于Claude Code的设计理念，项目制定了详细的改进方案，参考 [CLAUDE_CODE_IMPROVEMENTS.md](CLAUDE_CODE_IMPROVEMENTS.md)：
+- **终端原生集成**：开发CLI工具，实现命令行界面
+- **可观察性**：集成OpenTelemetry进行监控
+- **安全机制**：增强企业级安全和合规性
+- **项目规划**：实现任务分解和进度跟踪功能
+
+#### 安全机制特性
+- **速率限制**：防止API滥用和过度请求
+- **访问日志**：记录所有用户操作以便审计
+- **数据加密**：敏感数据加密存储和传输
+- **签名验证**：确保数据完整性和来源可信

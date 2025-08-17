@@ -18,7 +18,8 @@ class PromptManager:
         self.prompts = {
             "query_parser": self._get_query_parser_prompt(),
             "response_generator": self._get_response_generator_prompt(),
-            "data_analyzer": self._get_data_analyzer_prompt()
+            "data_analyzer": self._get_data_analyzer_prompt(),
+            "reflection_analyzer": self._get_reflection_analyzer_prompt()
         }
         
     def _get_query_parser_prompt(self) -> str:
@@ -163,6 +164,27 @@ class PromptManager:
 4. 异常检测
 
 以结构化格式返回分析结果。"""
+        
+    def _get_reflection_analyzer_prompt(self) -> str:
+        """获取反思分析prompt"""
+        return """你是一个AI反思专家。请对当前的分析结果进行深度思考和优化。
+
+原始查询: {original_query}
+当前结果: {current_result}
+
+请执行以下反思和优化:
+1. 分析当前结果的不足之处
+2. 识别可能被忽略的要点
+3. 提出改进建议
+4. 如有必要，生成更深入的分析请求
+
+请严格按照以下JSON格式返回结果，不要包含其他文字:
+{
+  "analysis": "当前结果的不足分析",
+  "improvement_suggestions": ["建议1", "建议2"],
+  "deep_analysis_needed": true,
+  "new_query": "如果需要深入分析，请提供新的查询"
+}"""
         
     def get_prompt(self, prompt_name: str) -> str:
         """获取指定名称的prompt"""
