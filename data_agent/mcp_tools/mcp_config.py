@@ -8,6 +8,7 @@ class ServerType(Enum):
     SEC_FETCH = "sec-fetch"
     INVESTMENT_ANALYSIS = "investment-analysis"
     STOCK_QUERY = "stock-query"
+    DEMAND_NETWORK = "demand-network"  # 需求网络分析
     CUSTOM = "custom"
 
 @dataclass
@@ -48,6 +49,7 @@ class MCPConfigManager:
         ServerType.SEC_FETCH: 8000,
         ServerType.INVESTMENT_ANALYSIS: 8001,
         ServerType.STOCK_QUERY: 8002,
+        ServerType.DEMAND_NETWORK: 8003,  # 需求网络分析服务
     }
     
     # 工具到服务器类型的映射
@@ -67,6 +69,12 @@ class MCPConfigManager:
         "technical_analysis": ServerType.STOCK_QUERY,
         "fundamental_analysis": ServerType.STOCK_QUERY,
         "real_time_market_data": ServerType.STOCK_QUERY,
+        
+        # 需求网络分析工具
+        "demand_network_analysis": ServerType.DEMAND_NETWORK,
+        "market_demand_forecasting": ServerType.DEMAND_NETWORK,
+        "consumer_behavior_analysis": ServerType.DEMAND_NETWORK,
+        "trend_prediction": ServerType.DEMAND_NETWORK,
     }
     
     # 服务器类型到说明的映射
@@ -74,6 +82,7 @@ class MCPConfigManager:
         ServerType.SEC_FETCH: "SEC财报数据分析服务，支持完整的13F和财务数据查询",
         ServerType.INVESTMENT_ANALYSIS: "SEC投资分析服务，提供巴菲特风格的投资分析功能",
         ServerType.STOCK_QUERY: "Alpha Vantage股票查询服务，提供实时股票数据和技术分析",
+        ServerType.DEMAND_NETWORK: "需求网络分析服务，提供市场需求分析和趋势预测功能",
     }
     
     def __init__(self):
@@ -124,6 +133,15 @@ class MCPConfigManager:
             server_instructions=self.SERVER_INSTRUCTIONS[ServerType.STOCK_QUERY]
         )
         servers[stock_server.name] = stock_server
+        
+        # 需求网络分析服务器
+        demand_network_server = MCPServerConfig(
+            name="demand-network-analysis",
+            server_type=ServerType.DEMAND_NETWORK,
+            url=f"{base_url}:{self.DEFAULT_PORTS[ServerType.DEMAND_NETWORK]}/mcp",
+            server_instructions=self.SERVER_INSTRUCTIONS[ServerType.DEMAND_NETWORK]
+        )
+        servers[demand_network_server.name] = demand_network_server
         
         return servers
     

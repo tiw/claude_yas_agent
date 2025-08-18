@@ -349,6 +349,7 @@ class WebService:
             data = await request.json()
             message = data.get('message', '')
             files = data.get('files', [])
+            agent_type = data.get('agent', 'main')  # 获取请求的Agent类型
             
             if not message and not files:
                 return web.json_response({
@@ -374,9 +375,29 @@ class WebService:
                 
                 message += file_info
             
-            # 处理用户消息
-            logger.info(f"处理用户消息: {message}")
-            response = await self.agent.process_query(message, files=files)
+            # 根据请求的Agent类型处理消息
+            logger.info(f"处理用户消息: {message} (使用Agent: {agent_type})")
+            
+            if agent_type == 'main':
+                # 使用主Agent处理
+                response = await self.agent.process_query(message, files=files)
+            elif agent_type == 'demand-network':
+                # 创建或使用需求网络分析Agent
+                if not hasattr(self, 'demand_network_agent') or self.demand_network_agent is None:
+                    # 创建需求网络分析Agent
+                    from data_agent.demand_network_agent import DemandNetworkAgentConfig, DemandNetworkAnalysisAgent
+                    config = DemandNetworkAgentConfig(
+                        debug_mode=self.agent.config.debug_mode,
+                        langfuse_enabled=self.agent.config.langfuse_enabled,
+                        default_llm=self.agent.config.default_llm
+                    )
+                    self.demand_network_agent = DemandNetworkAnalysisAgent(config)
+                
+                # 使用需求网络分析Agent处理
+                response = await self.demand_network_agent.process_query(message, files=files)
+            else:
+                # 默认使用主Agent处理
+                response = await self.agent.process_query(message, files=files)
             
             return web.json_response({
                 "response": response,
@@ -412,6 +433,7 @@ class WebService:
                         if message and self.agent:
                             # 获取会话ID（如果提供）
                             session_id = data.get('session_id')
+                            agent_type = data.get('agent', 'main')  # 获取请求的Agent类型
                             
                             # 如果有会话ID，启动该会话
                             if session_id:
@@ -420,8 +442,27 @@ class WebService:
                                 # 否则开始新会话
                                 session_id = self.agent.enhanced_memory.start_session()
                             
-                            # 处理消息
-                            response = await self.agent.process_query(message)
+                            # 根据请求的Agent类型处理消息
+                            if agent_type == 'main':
+                                # 使用主Agent处理
+                                response = await self.agent.process_query(message)
+                            elif agent_type == 'demand-network':
+                                # 创建或使用需求网络分析Agent
+                                if not hasattr(self, 'demand_network_agent') or self.demand_network_agent is None:
+                                    # 创建需求网络分析Agent
+                                    from data_agent.demand_network_agent import DemandNetworkAgentConfig, DemandNetworkAnalysisAgent
+                                    config = DemandNetworkAgentConfig(
+                                        debug_mode=self.agent.config.debug_mode,
+                                        langfuse_enabled=self.agent.config.langfuse_enabled,
+                                        default_llm=self.agent.config.default_llm
+                                    )
+                                    self.demand_network_agent = DemandNetworkAnalysisAgent(config)
+                                
+                                # 使用需求网络分析Agent处理
+                                response = await self.demand_network_agent.process_query(message)
+                            else:
+                                # 默认使用主Agent处理
+                                response = await self.agent.process_query(message)
                             
                             # 获取当前会话ID
                             session_id = self.agent.debug_manager.current_session_id if self.agent.debug_manager else session_id
