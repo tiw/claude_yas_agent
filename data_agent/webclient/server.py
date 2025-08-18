@@ -36,6 +36,7 @@ class WebService:
         
         # API路由
         self.app.router.add_post('/api/chat', self.chat)
+        self.app.router.add_post('/api/upload', self.upload_file)
         self.app.router.add_get('/api/health', self.health_check)
         self.app.router.add_get('/api/status', self.system_status)
         self.app.router.add_get('/api/mcp/status', self.mcp_status)
@@ -274,16 +275,84 @@ class WebService:
                 "status": "error"
             }, status=500)
     
+    async def upload_file(self, request):
+        """处理文件上传"""
+        try:
+            # 获取上传的文件
+            reader = await request.multipart()
+            
+            # 存储文件内容和元数据
+            uploaded_files = []
+            
+            # 创建临时目录存储上传的文件
+            upload_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # 处理每个上传的文件
+            while True:
+                part = await reader.next()
+                if part is None:
+                    break
+                
+                if part.name == 'files':
+                    filename = part.filename
+                    if not filename:
+                        continue
+                        
+                    # 生成安全的文件名
+                    import uuid
+                    safe_filename = f"{uuid.uuid4()}_{filename}"
+                    file_path = os.path.join(upload_dir, safe_filename)
+                    
+                    # 保存文件
+                    with open(file_path, 'wb') as f:
+                        while True:
+                            chunk = await part.read_chunk()
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                    
+                    # 获取文件信息
+                    file_size = os.path.getsize(file_path)
+                    
+                    # 读取文件内容（仅对小文件）
+                    file_content = None
+                    if file_size < 1024 * 1024:  # 小于1MB的文件读取内容
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            file_content = f.read()
+                    
+                    uploaded_files.append({
+                        "filename": filename,
+                        "safe_filename": safe_filename,
+                        "file_path": file_path,
+                        "size": file_size,
+                        "content": file_content
+                    })
+            
+            return web.json_response({
+                "message": f"成功上传 {len(uploaded_files)} 个文件",
+                "files": uploaded_files,
+                "status": "success"
+            })
+            
+        except Exception as e:
+            logger.error(f"处理文件上传时出错: {e}")
+            return web.json_response({
+                "error": str(e),
+                "status": "error"
+            }, status=500)
+    
     async def chat(self, request):
         """处理聊天请求"""
         try:
             # 解析请求数据
             data = await request.json()
             message = data.get('message', '')
+            files = data.get('files', [])
             
-            if not message:
+            if not message and not files:
                 return web.json_response({
-                    "error": "消息不能为空"
+                    "error": "消息或文件不能为空"
                 }, status=400)
             
             if not self.agent:
@@ -293,9 +362,21 @@ class WebService:
                         "error": "Agent初始化失败"
                     }, status=500)
             
+            # 如果有上传的文件，将文件信息添加到消息中
+            if files:
+                file_info = "\n\n上传的文件信息:\n"
+                for file in files:
+                    file_info += f"- 文件名: {file['filename']}\n"
+                    if file.get('content'):
+                        file_info += f"  文件内容预览: {file['content'][:500]}...\n"
+                    else:
+                        file_info += f"  文件路径: {file['file_path']}\n"
+                
+                message += file_info
+            
             # 处理用户消息
             logger.info(f"处理用户消息: {message}")
-            response = await self.agent.process_query(message)
+            response = await self.agent.process_query(message, files=files)
             
             return web.json_response({
                 "response": response,
@@ -329,11 +410,21 @@ class WebService:
                         message = data.get('message', '')
                         
                         if message and self.agent:
-                            # 处理消息（会自动开始新会话）
+                            # 获取会话ID（如果提供）
+                            session_id = data.get('session_id')
+                            
+                            # 如果有会话ID，启动该会话
+                            if session_id:
+                                self.agent.enhanced_memory.start_session(session_id)
+                            else:
+                                # 否则开始新会话
+                                session_id = self.agent.enhanced_memory.start_session()
+                            
+                            # 处理消息
                             response = await self.agent.process_query(message)
                             
                             # 获取当前会话ID
-                            session_id = self.agent.debug_manager.current_session_id if self.agent.debug_manager else None
+                            session_id = self.agent.debug_manager.current_session_id if self.agent.debug_manager else session_id
                             
                             # 发送响应，包含会话ID
                             await ws.send_json({

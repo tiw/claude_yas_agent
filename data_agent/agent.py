@@ -7,9 +7,11 @@ from data_agent.mcp_tools.mcp_config import MCPConfigManager, MCPServerConfig, S
 from data_agent.utils.debug import DebugManager
 from data_agent.prompts.prompt_manager import PromptManager
 from data_agent.llm.llm_manager import LLMManager
-from data_agent.utils.observability import ObservabilityManager
+# from data_agent.utils.observability import ObservabilityManager
+from data_agent.utils.observability_disabled import ObservabilityManager
 from data_agent.utils.security import SecurityManager
 from data_agent.memory import MemoryManager
+from data_agent.enhanced_memory import AgentMemory
 from data_agent.planning import ProjectPlanner
 from data_agent.multi_agent import SubAgentManager
 from data_agent.reflection import ReflectionEngine
@@ -57,12 +59,13 @@ class DataAnalysisAgent:
         self.observability = ObservabilityManager()
         self.security = SecurityManager()
         self.memory = MemoryManager()
+        self.enhanced_memory = AgentMemory()
         self.planner = ProjectPlanner()
         self.sub_agent_manager = SubAgentManager(self)
         self.reflection_engine = ReflectionEngine(self)
         self.conversation_history = []
         
-    async def process_query(self, user_input: str, user_id: str = "anonymous") -> str:
+    async def process_query(self, user_input: str, user_id: str = "anonymous", files: list = None) -> str:
         """处理用户查询（带安全检查）"""
         # 检查速率限制
         if not self.security.check_rate_limit(user_id):
@@ -78,7 +81,29 @@ class DataAnalysisAgent:
                 # 开始新的调试会话
                 session_id = self.debug_manager.start_new_session()
                 
-                # 记录用户输入
+                # 如果有文件，将文件信息添加到用户输入中
+                if files:
+                    file_info = "\n\n上传的文件信息:\n"
+                    for file in files:
+                        file_info += f"- 文件名: {file['filename']}\n"
+                        if file.get('content'):
+                            file_info += f"  文件内容预览: {file['content'][:100000]}...\n"
+                        else:
+                            file_info += f"  文件路径: {file['file_path']}\n"
+                            
+                        # 记住文件信息到增强内存
+                        self.enhanced_memory.remember_file_upload(
+                            file['filename'], 
+                            {
+                                "content_preview": file.get('content', '')[:1000] if file.get('content') else None,
+                                "file_path": file.get('file_path'),
+                                "size": file.get('size', 0)
+                            }
+                        )
+                    user_input += file_info
+                
+                # 记录用户输入到增强内存
+                self.enhanced_memory.add_message("user", user_input)
                 self.conversation_history.append({"role": "user", "content": user_input})
                 self.debug_manager.log_llm_input(user_input, self.conversation_history)
                 
@@ -88,7 +113,8 @@ class DataAnalysisAgent:
                 # 执行数据分析
                 result = await self._execute_analysis(parsed_query)
                 
-                # 记录结果
+                # 记录结果到增强内存
+                self.enhanced_memory.add_message("assistant", result)
                 self.conversation_history.append({"role": "assistant", "content": result})
                 self.debug_manager.log_llm_output(result)
                 
@@ -108,7 +134,9 @@ class DataAnalysisAgent:
         context = {
             "user_input": user_input,
             "current_date": datetime.now().isoformat(),
-            "supported_mcp_tools": self.mcp_client.get_available_tools()
+            "supported_mcp_tools": self.mcp_client.get_available_tools(),
+            "conversation_history": self.enhanced_memory.get_recent_history(5),  # 最近5轮对话
+            "uploaded_files": self.enhanced_memory.user_preferences.get("uploaded_files", {})
         }
         
         # 调用LLM解析查询
@@ -259,7 +287,8 @@ class DataAnalysisAgent:
         context = {
             "original_query": parsed_query,
             "analysis_results": results,
-            "conversation_history": self.conversation_history[-5:]  # 最近5轮对话
+            "conversation_history": self.enhanced_memory.get_recent_history(5),  # 最近5轮对话
+            "uploaded_files": self.enhanced_memory.user_preferences.get("uploaded_files", {})
         }
         
         # 调用LLM生成最终响应

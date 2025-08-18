@@ -101,6 +101,36 @@
 
             <!-- 输入区域 -->
             <div class="border-t p-4 bg-gray-50">
+                <!-- 文件上传区域 -->
+                <div class="mb-3">
+                    <div class="flex items-center">
+                        <input 
+                            type="file" 
+                            id="file-input" 
+                            multiple 
+                            class="hidden"
+                        >
+                        <button 
+                            id="file-upload-button" 
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200 mr-2"
+                        >
+                            <i class="fas fa-paperclip mr-1"></i> 上传文件
+                        </button>
+                        <span id="file-name" class="text-sm text-gray-600 truncate flex-1"></span>
+                        <button 
+                            id="clear-files-button" 
+                            class="bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-lg transition duration-200 ml-2 hidden"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="file-list" class="mt-2 text-xs text-gray-500 hidden">
+                        <p>已选择文件:</p>
+                        <ul id="selected-files" class="list-disc pl-5 mt-1"></ul>
+                    </div>
+                </div>
+                
+                <!-- 消息输入区域 -->
                 <div class="flex items-center">
                     <input 
                         type="text" 
@@ -153,6 +183,85 @@
         const chatContainer = document.getElementById('chat-container');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const fileInput = document.getElementById('file-input');
+        const fileUploadButton = document.getElementById('file-upload-button');
+        const clearFilesButton = document.getElementById('clear-files-button');
+        const fileName = document.getElementById('file-name');
+        const fileList = document.getElementById('file-list');
+        const selectedFiles = document.getElementById('selected-files');
+        
+        // 存储选中的文件
+        let selectedFileList = [];
+        
+        // 会话管理
+        let currentSessionId = null;
+        
+        // 处理文件选择
+        function handleFileSelect() {
+            fileInput.click();
+        }
+        
+        // 更新文件显示
+        function updateFileDisplay() {
+            if (selectedFileList.length > 0) {
+                // 显示文件名
+                const names = selectedFileList.map(file => file.name);
+                fileName.textContent = names.join(', ');
+                
+                // 显示文件列表
+                selectedFiles.innerHTML = '';
+                names.forEach(name => {
+                    const li = document.createElement('li');
+                    li.textContent = name;
+                    selectedFiles.appendChild(li);
+                });
+                
+                // 显示清除按钮和文件列表
+                clearFilesButton.classList.remove('hidden');
+                fileList.classList.remove('hidden');
+            } else {
+                // 清除显示
+                fileName.textContent = '';
+                selectedFiles.innerHTML = '';
+                clearFilesButton.classList.add('hidden');
+                fileList.classList.add('hidden');
+            }
+        }
+        
+        // 清除选中的文件
+        function clearSelectedFiles() {
+            selectedFileList = [];
+            fileInput.value = '';
+            updateFileDisplay();
+        }
+        
+        // 上传文件到服务器
+        async function uploadFiles() {
+            if (selectedFileList.length === 0) return null;
+            
+            const formData = new FormData();
+            selectedFileList.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.files;
+                } else {
+                    console.error('文件上传失败:', response.statusText);
+                    return null;
+                }
+            } catch (error) {
+                console.error('文件上传错误:', error);
+                return null;
+            }
+        }
 
         // 添加消息到聊天界面
         function addMessage(role, content) {
@@ -260,12 +369,25 @@
             try {
                 const typingIndicator = showTypingIndicator();
                 
+                // 如果有选中的文件，先上传文件
+                let uploadedFiles = null;
+                if (selectedFileList.length > 0) {
+                    uploadedFiles = await uploadFiles();
+                    clearSelectedFiles(); // 上传后清除文件列表
+                }
+                
+                // 发送消息和文件信息到后端
+                const requestData = {
+                    message: message,
+                    files: uploadedFiles
+                };
+                
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify(requestData)
                 });
                 
                 hideTypingIndicator();
@@ -293,9 +415,24 @@
                 sendMessage(message);
             }
         }
+        
+        // 通过WebSocket发送消息（支持会话持久化）
+        async function sendWebSocketMessage(message) {
+            // 这里应该实现WebSocket连接逻辑
+            // 为了简化，我们暂时使用HTTP API
+            return sendMessage(message);
+        }
 
         // 事件监听器
         sendButton.addEventListener('click', handleSendMessage);
+        fileUploadButton.addEventListener('click', handleFileSelect);
+        clearFilesButton.addEventListener('click', clearSelectedFiles);
+        
+        // 文件选择变化事件
+        fileInput.addEventListener('change', (e) => {
+            selectedFileList = Array.from(e.target.files);
+            updateFileDisplay();
+        });
         
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
