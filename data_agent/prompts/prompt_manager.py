@@ -19,7 +19,9 @@ class PromptManager:
             "query_parser": self._get_query_parser_prompt(),
             "response_generator": self._get_response_generator_prompt(),
             "data_analyzer": self._get_data_analyzer_prompt(),
-            "reflection_analyzer": self._get_reflection_analyzer_prompt()
+            "reflection_analyzer": self._get_reflection_analyzer_prompt(),
+            "demand_network_query_parser": self._get_demand_network_query_parser_prompt(),
+            "demand_network_response_generator": self._get_demand_network_response_generator_prompt()
         }
         
     def _get_query_parser_prompt(self) -> str:
@@ -219,3 +221,125 @@ class PromptManager:
             logger.info(f"Prompts已保存到 {filepath}")
         except Exception as e:
             logger.error(f"保存prompts文件失败: {e}")
+            
+    def _get_demand_network_query_parser_prompt(self) -> str:
+        """获取需求网络查询解析prompt"""
+        return """你是一个需求网络分析查询解析器。请将用户输入解析为结构化查询，专门用于市场需求分析和趋势预测。
+
+用户输入: {user_input}
+当前日期: {current_date}
+
+请分析用户想要执行什么类型的需求网络分析，并提取必要的参数。
+
+支持的MCP工具及其功能说明:
+1. 需求网络分析服务 (demand-network-analysis):
+   - demand_network_analysis: 分析特定行业或产品的需求网络
+   - market_demand_forecasting: 市场需求预测
+   - consumer_behavior_analysis: 消费者行为分析
+   - trend_prediction: 趋势预测
+
+请严格按照以下JSON格式返回结果，不要包含其他文字:
+{
+  "intent": "分析智能手机市场的需求趋势",
+  "mcp_tools": [
+    {
+      "name": "market_demand_forecasting",
+      "parameters": {
+        "industry": "smartphones",
+        "region": "global",
+        "time_horizon": "12_months"
+      }
+    }
+  ],
+  "date_range": {
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31"
+  },
+  "filters": {
+    "segments": ["consumers", "businesses"],
+    "metrics": ["demand_volume", "growth_rate", "market_share"]
+  }
+}
+
+示例查询和对应的解析结果:
+1. 用户输入: "分析电动汽车市场需求趋势"
+   解析结果:
+   {
+     "intent": "电动汽车市场需求趋势分析",
+     "mcp_tools": [
+       {
+         "name": "market_demand_forecasting",
+         "parameters": {
+           "industry": "electric_vehicles"
+         }
+       }
+     ]
+   }
+
+2. 用户输入: "预测AI芯片未来6个月的市场需求"
+   解析结果:
+   {
+     "intent": "AI芯片市场需求预测",
+     "mcp_tools": [
+       {
+         "name": "market_demand_forecasting",
+         "parameters": {
+           "industry": "ai_chips",
+           "time_horizon": "6_months"
+         }
+       }
+     ]
+   }
+
+3. 用户输入: "分析消费者对可穿戴设备的购买行为"
+   解析结果:
+   {
+     "intent": "可穿戴设备消费者行为分析",
+     "mcp_tools": [
+       {
+         "name": "consumer_behavior_analysis",
+         "parameters": {
+           "product_category": "wearable_devices"
+         }
+       }
+     ]
+   }
+
+注意事项:
+1. 请只返回JSON格式的结果，不要包含其他文字
+2. 如果没有相关字段，请设置为null或空数组
+3. 日期格式为YYYY-MM-DD
+4. 确保JSON格式正确，可以被直接解析
+5. 根据用户查询选择最合适的MCP工具
+6. 行业和产品类别请使用英文标识符"""
+        
+    def _get_demand_network_response_generator_prompt(self) -> str:
+        """获取需求网络响应生成prompt"""
+        return """你是一个需求网络分析报告生成器。请根据分析结果生成清晰、易懂的市场需求分析报告。
+
+原始查询: {original_query}
+分析结果: {analysis_results}
+
+请严格按照以下JSON格式返回结果，不要包含其他文字:
+{
+  "report": {
+    "executive_summary": "执行摘要",
+    "detailed_analysis": "详细分析结果",
+    "key_insights": ["关键洞察1", "关键洞察2"],
+    "recommendations": ["建议1", "建议2"],
+    "market_trends": ["市场趋势1", "市场趋势2"],
+    "demand_forecast": {
+      "short_term": "短期预测",
+      "medium_term": "中期预测",
+      "long_term": "长期预测"
+    }
+  }
+}
+
+注意事项:
+1. 请只返回JSON格式的结果，不要包含其他文字
+2. 确保JSON格式正确，可以被直接解析
+3. 使用简洁明了的语言，避免过多的技术术语
+4. 如果没有相关内容，请设置为null或空数组
+5. 重点关注市场需求、消费者行为和市场趋势
+6. 提供可操作的洞察和建议"""
